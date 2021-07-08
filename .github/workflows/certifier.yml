@@ -1,0 +1,47 @@
+name: certifer
+
+on:
+  push:
+    branches: [ '*' ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        go-version: [1.15.x]
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@master
+        with:
+          fetch-depth: 1
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: test
+        run: make test
+      - name: dist
+        run: make dist
+      - name: prepare-test
+        run: make prepare-test
+      - name: clone certifier
+        uses: actions/checkout@master
+        with:
+          repository: nitishkumar71/certifier
+          ref: test_faasd
+          fetch-depth: 1
+          path: ./certifier
+      - name: certifier test
+        run: |
+          cd certifier
+          go mod download
+          sudo cat /var/lib/faasd/secrets/basic-auth-password | /usr/local/bin/faas-cli login --password-stdin
+          cp -r .openfaas/ ~/
+          export CI=true
+          export OPENFAAS_CONFIG='~/.openfaas'
+          export OPENFAAS_URL='http://127.0.0.1:8080/'
+          make test-faasd .FEATURE_FLAGS='-enableAuth'
